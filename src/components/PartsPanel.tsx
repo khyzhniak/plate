@@ -12,8 +12,6 @@ interface Props {
   settings: CutSettings
   onChange: (parts: PartRow[]) => void
   onUnitChange: (unit: LengthUnit) => void
-  /** Called with the full parts list after a paste was applied (already nested). */
-  onPasteApplied?: (nextParts: PartRow[]) => void
 }
 
 export function PartsPanel({
@@ -21,7 +19,6 @@ export function PartsPanel({
   settings,
   onChange,
   onUnitChange,
-  onPasteApplied,
 }: Props) {
   const fileRef = useRef<HTMLTextAreaElement>(null)
   const unit = settings.inputUnit
@@ -55,10 +52,8 @@ export function PartsPanel({
       alert('Не вдалося розібрати вставку. Очікується: довжина\\tширина')
       return
     }
-    const next = [...parts, ...added]
-    onChange(next)
+    onChange([...parts, ...added])
     if (fileRef.current) fileRef.current.value = ''
-    onPasteApplied?.(next)
   }
 
   async function pasteFromClipboard() {

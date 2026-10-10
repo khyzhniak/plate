@@ -4,15 +4,9 @@ interface Props {
   settings: CutSettings
   materials: Material[]
   onChange: (settings: CutSettings) => void
-  onCompute: () => void
 }
 
-export function SettingsPanel({
-  settings,
-  materials,
-  onChange,
-  onCompute,
-}: Props) {
+export function SettingsPanel({ settings, materials, onChange }: Props) {
   function patch(p: Partial<CutSettings>) {
     onChange({ ...settings, ...p })
   }
@@ -66,13 +60,9 @@ export function SettingsPanel({
       </div>
 
       <p className="text-[11px] text-[var(--ink-muted)] leading-snug">
-        Розкрій — наскрізні різи під форматну пилку. Малюнок вмикається в картці
+        Розкрій перераховується автоматично після змін. Малюнок — у картці
         матеріалу («Враховувати малюнок»).
       </p>
-
-      <button type="button" className="btn btn-primary w-full" onClick={onCompute}>
-        Розрахувати розкрій
-      </button>
     </section>
   )
 }

@@ -13,7 +13,81 @@ import {
   saveSettings,
 } from './lib/storage'
 import { nestSheets, type NestResult } from './nesting'
-import type { CutSettings, LengthUnit, PartRow } from './types/app'
+import type { CutSettings, LengthUnit, Material, PartRow } from './types/app'
+
+const NEST_DEBOUNCE_MS = 150
+
+function runNest(
+  parts: PartRow[],
+  material: Material | null,
+  settings: CutSettings,
+): { result: NestResult | null; error: string | null } {
+  if (!material) {
+    return { result: null, error: 'Оберіть матеріал у налаштуваннях' }
+  }
+  if (parts.length === 0) {
+    return { result: null, error: null }
+  }
+
+  const invalid = parts.find(
+    (p) =>
+      !(p.length > 0) ||
+      !(p.width > 0) ||
+      !Number.isFinite(p.length) ||
+      !Number.isFinite(p.width) ||
+      !Number.isFinite(p.quantity) ||
+      p.quantity < 1,
+  )
+  if (invalid) {
+    return {
+      result: null,
+      error: `Некоректні розміри: «${invalid.name || 'деталь'}» (довжина/ширина/к-сть)`,
+    }
+  }
+
+  if (
+    !(material.sheetLengthMm > 0) ||
+    !(material.sheetWidthMm > 0) ||
+    !(material.availableSheets > 0)
+  ) {
+    return {
+      result: null,
+      error: 'Некоректні розміри або кількість листів матеріалу',
+    }
+  }
+
+  if (settings.kerfMm < 0 || settings.edgeTrimMm < 0) {
+    return { result: null, error: 'Пропил і обрізка краю не можуть бути від’ємними' }
+  }
+
+  const respectGrain = material.respectGrain
+  const nestParts = parts.map((p) => ({
+    id: p.id,
+    name: p.name,
+    width: p.length,
+    height: p.width,
+    quantity: p.quantity,
+    grain: respectGrain ? ('length' as const) : ('none' as const),
+  }))
+
+  const result = nestSheets(
+    nestParts,
+    {
+      width: material.sheetLengthMm,
+      height: material.sheetWidthMm,
+      grain: respectGrain ? 'length' : 'none',
+      availableCount: material.availableSheets,
+    },
+    {
+      kerf: settings.kerfMm,
+      edgeTrim: settings.edgeTrimMm,
+      allowRotate: true,
+      respectGrain,
+      mode: 'guillotine',
+    },
+  )
+  return { result, error: null }
+}
 
 export default function App() {
   const [materials, setMaterials] = useState(() => loadMaterials())
@@ -31,55 +105,19 @@ export default function App() {
     [materials, settings.materialId],
   )
 
-  function handleCompute(partsOverride?: PartRow[]) {
-    setError(null)
-    const activeParts = partsOverride ?? parts
-    if (!selectedMaterial) {
-      setError('Оберіть матеріал у налаштуваннях')
-      setResult(null)
-      return
-    }
-    if (activeParts.length === 0) {
-      setError('Додайте хоча б одну деталь')
-      setResult(null)
-      return
-    }
-
-    const respectGrain = selectedMaterial.respectGrain
-    // When grain matters: part length aligns with sheet length; no free 90° that breaks it.
-    // When off: free rotate under guillotine for better yield.
-    const nestParts = activeParts.map((p) => ({
-      id: p.id,
-      name: p.name,
-      width: p.length,
-      height: p.width,
-      quantity: p.quantity,
-      grain: respectGrain ? ('length' as const) : ('none' as const),
-    }))
-
-    const nestResult = nestSheets(
-      nestParts,
-      {
-        width: selectedMaterial.sheetLengthMm,
-        height: selectedMaterial.sheetWidthMm,
-        grain: respectGrain ? 'length' : 'none',
-        availableCount: selectedMaterial.availableSheets,
-      },
-      {
-        kerf: settings.kerfMm,
-        edgeTrim: settings.edgeTrimMm,
-        allowRotate: true,
-        respectGrain,
-        mode: 'guillotine',
-      },
-    )
-    setResult(nestResult)
-  }
-
+  // Single reactive path: any nest-affecting input → debounced guillotine → map
   useEffect(() => {
-    handleCompute()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+    const timer = window.setTimeout(() => {
+      const { result: next, error: err } = runNest(
+        parts,
+        selectedMaterial,
+        settings,
+      )
+      setResult(next)
+      setError(err)
+    }, NEST_DEBOUNCE_MS)
+    return () => window.clearTimeout(timer)
+  }, [parts, materials, settings, selectedMaterial])
 
   function onUnitChange(unit: LengthUnit) {
     setSettings((s) => ({ ...s, inputUnit: unit }))
@@ -97,7 +135,7 @@ export default function App() {
               Розкрій листових матеріалів
             </h1>
             <p className="text-sm text-[var(--ink-muted)] mt-0.5">
-              МДФ, фанера, ДСП — карта розкрою під форматну пилку
+              МДФ, фанера, ДСП — карта оновлюється автоматично
             </p>
           </div>
           {error && (
@@ -123,13 +161,11 @@ export default function App() {
             settings={settings}
             onChange={setParts}
             onUnitChange={onUnitChange}
-            onPasteApplied={(nextParts) => handleCompute(nextParts)}
           />
           <SettingsPanel
             settings={settings}
             materials={materials}
             onChange={setSettings}
-            onCompute={handleCompute}
           />
           <StatsPanel result={result} />
         </aside>
