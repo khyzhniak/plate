@@ -1,5 +1,3 @@
-import type { GrainDirection, OptimizationMode } from '../nesting'
-
 export type MaterialType = 'mdf' | 'plywood' | 'chipboard' | 'other'
 
 export interface Material {
@@ -9,7 +7,11 @@ export interface Material {
   thicknessMm: number
   sheetLengthMm: number
   sheetWidthMm: number
-  grain: GrainDirection
+  /**
+   * When true, part length must stay along sheet length (grain).
+   * When false (default), grain is ignored and 90° turns are free under guillotine.
+   */
+  respectGrain: boolean
   availableSheets: number
 }
 
@@ -18,10 +20,11 @@ export type LengthUnit = 'mm' | 'cm' | 'm'
 export interface PartRow {
   id: string
   name: string
+  /** Довжина заготовки, мм */
   length: number
+  /** Ширина заготовки, мм */
   width: number
   quantity: number
-  grain: GrainDirection
 }
 
 export interface CutSettings {
@@ -29,9 +32,6 @@ export interface CutSettings {
   kerfMm: number
   /** Perimeter edge trim on all four sides (mm). Default 3. */
   edgeTrimMm: number
-  allowRotate: boolean
-  respectGrain: boolean
-  mode: OptimizationMode
   inputUnit: LengthUnit
 }
 
@@ -40,17 +40,6 @@ export const MATERIAL_TYPE_LABELS: Record<MaterialType, string> = {
   plywood: 'Фанера',
   chipboard: 'ДСП',
   other: 'Інше',
-}
-
-export const GRAIN_LABELS: Record<GrainDirection, string> = {
-  length: 'Уздовж довжини',
-  width: 'Уздовж ширини',
-  none: 'Без малюнка',
-}
-
-export const MODE_LABELS: Record<OptimizationMode, string> = {
-  guillotine: 'Під форматну пилку (наскрізні різи)',
-  maxrects: 'Макс. використання (не для пилки)',
 }
 
 export function toMm(value: number, unit: LengthUnit): number {

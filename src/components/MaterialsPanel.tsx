@@ -1,7 +1,6 @@
 import { useState } from 'react'
 import type { Material, MaterialType } from '../types/app'
-import { GRAIN_LABELS, MATERIAL_TYPE_LABELS } from '../types/app'
-import type { GrainDirection } from '../nesting'
+import { MATERIAL_TYPE_LABELS } from '../types/app'
 import { newId } from '../lib/storage'
 
 interface Props {
@@ -18,7 +17,7 @@ const emptyMaterial = (): Material => ({
   thicknessMm: 16,
   sheetLengthMm: 2800,
   sheetWidthMm: 2070,
-  grain: 'none',
+  respectGrain: false,
   availableSheets: 10,
 })
 
@@ -213,24 +212,6 @@ export function MaterialsPanel({
                 />
               </label>
               <label className="text-xs space-y-1">
-                <span className="text-[var(--ink-muted)]">Малюнок</span>
-                <select
-                  className="field"
-                  value={selected.grain}
-                  onChange={(e) =>
-                    update(selected.id, {
-                      grain: e.target.value as GrainDirection,
-                    })
-                  }
-                >
-                  {(Object.keys(GRAIN_LABELS) as GrainDirection[]).map((k) => (
-                    <option key={k} value={k}>
-                      {GRAIN_LABELS[k]}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="text-xs space-y-1">
                 <span className="text-[var(--ink-muted)]">Кількість листів</span>
                 <input
                   className="field mono"
@@ -243,6 +224,23 @@ export function MaterialsPanel({
                     })
                   }
                 />
+              </label>
+              <label className="col-span-2 flex items-start gap-2 text-sm pt-1">
+                <input
+                  type="checkbox"
+                  className="mt-0.5"
+                  checked={selected.respectGrain}
+                  onChange={(e) =>
+                    update(selected.id, { respectGrain: e.target.checked })
+                  }
+                />
+                <span>
+                  <span className="font-medium">Враховувати малюнок</span>
+                  <span className="block text-[11px] text-[var(--ink-muted)] leading-snug mt-0.5">
+                    Увімкнено: довжина деталі уздовж довжини листа. Вимкнено
+                    (типово): малюнок не враховується, поворот 90° вільний.
+                  </span>
+                </span>
               </label>
               <div className="col-span-2 flex gap-2">
                 <button

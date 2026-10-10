@@ -1,4 +1,3 @@
-import type { GrainDirection } from '../nesting'
 import type { LengthUnit, PartRow } from '../types/app'
 import { toMm } from '../types/app'
 import { newId } from './storage'
@@ -8,32 +7,8 @@ export interface ParsedPasteRow {
   length: number
   width: number
   quantity: number
-  grain: GrainDirection
   raw: string
   error?: string
-}
-
-const GRAIN_MAP: Record<string, GrainDirection> = {
-  '': 'none',
-  '-': 'none',
-  none: 'none',
-  ні: 'none',
-  нема: 'none',
-  'без малюнка': 'none',
-  length: 'length',
-  l: 'length',
-  довжина: 'length',
-  'уздовж довжини': 'length',
-  width: 'width',
-  w: 'width',
-  ширина: 'width',
-  'уздовж ширини': 'width',
-}
-
-function parseGrain(value: string | undefined): GrainDirection {
-  if (!value) return 'none'
-  const key = value.trim().toLowerCase()
-  return GRAIN_MAP[key] ?? 'none'
 }
 
 function parseNumber(value: string | undefined): number | null {
@@ -60,8 +35,6 @@ function looksLikeHeader(cols: string[]): boolean {
   ) {
     return true
   }
-  // Two numeric header labels like "Довжина" "Ширина" already caught;
-  // also skip if first two cells are non-numeric words that aren't sizes
   if (cols.length >= 2 && !isNumericCell(cols[0]) && !isNumericCell(cols[1])) {
     const second = (cols[1] ?? '').toLowerCase()
     if (second.includes('шир') || second.includes('width') || second === 'ш') {
@@ -72,68 +45,70 @@ function looksLikeHeader(cols: string[]): boolean {
 }
 
 /**
- * Map columns to fields.
- * Happy path: 2 columns = length, width (Excel paste).
- * Optional extras: name / qty / grain when present.
+ * Canonical: 2 columns = length, width (mm). Optional 3rd = qty.
+ * Also accepts name, length, width[, qty] for richer pastes.
  */
 function mapColumns(cols: string[]): {
   name: string
   lengthRaw: number | null
   widthRaw: number | null
   qtyRaw: number | null
-  grain: GrainDirection
 } {
   const n = cols.length
 
-  // 2-col happy path: length × width
+  // Happy path: length × width
   if (n === 2 && isNumericCell(cols[0]) && isNumericCell(cols[1])) {
     return {
       name: 'Без назви',
       lengthRaw: parseNumber(cols[0]),
       widthRaw: parseNumber(cols[1]),
       qtyRaw: null,
-      grain: 'none',
     }
   }
 
-  // 3 cols: length, width, qty  OR  name, length, width
+  // length, width, qty
+  if (n === 3 && isNumericCell(cols[0]) && isNumericCell(cols[1])) {
+    return {
+      name: 'Без назви',
+      lengthRaw: parseNumber(cols[0]),
+      widthRaw: parseNumber(cols[1]),
+      qtyRaw: parseNumber(cols[2]),
+    }
+  }
+
+  // name, length, width
   if (n === 3) {
+    return {
+      name: (cols[0] ?? '').trim() || 'Без назви',
+      lengthRaw: parseNumber(cols[1]),
+      widthRaw: parseNumber(cols[2]),
+      qtyRaw: null,
+    }
+  }
+
+  // name, length, width, qty
+  if (n >= 4) {
     if (isNumericCell(cols[0]) && isNumericCell(cols[1])) {
       return {
         name: 'Без назви',
         lengthRaw: parseNumber(cols[0]),
         widthRaw: parseNumber(cols[1]),
         qtyRaw: parseNumber(cols[2]),
-        grain: 'none',
       }
     }
     return {
       name: (cols[0] ?? '').trim() || 'Без назви',
       lengthRaw: parseNumber(cols[1]),
       widthRaw: parseNumber(cols[2]),
-      qtyRaw: null,
-      grain: 'none',
-    }
-  }
-
-  // 4+ cols: name, length, width, qty [, grain]
-  // Also: length, width, qty, grain (all-numeric first)
-  if (n >= 4 && isNumericCell(cols[0]) && isNumericCell(cols[1])) {
-    return {
-      name: 'Без назви',
-      lengthRaw: parseNumber(cols[0]),
-      widthRaw: parseNumber(cols[1]),
-      qtyRaw: parseNumber(cols[2]),
-      grain: parseGrain(cols[3]),
+      qtyRaw: parseNumber(cols[3]),
     }
   }
 
   return {
-    name: (cols[0] ?? '').trim() || 'Без назви',
-    lengthRaw: parseNumber(cols[1]),
-    widthRaw: parseNumber(cols[2]),
-    qtyRaw: parseNumber(cols[3]),
-    grain: parseGrain(cols[4]),
+    name: 'Без назви',
+    lengthRaw: parseNumber(cols[0]),
+    widthRaw: parseNumber(cols[1]),
+    qtyRaw: null,
   }
 }
 
@@ -160,7 +135,6 @@ export function parsePasteText(
         length: 0,
         width: 0,
         quantity: 0,
-        grain: 'none' as const,
         raw: line,
         error: 'Рядок заголовка — буде пропущено',
       }
@@ -176,17 +150,11 @@ export function parsePasteText(
       error = 'Некоректна кількість'
     }
 
-    const length = mapped.lengthRaw != null ? toMm(mapped.lengthRaw, unit) : 0
-    const width = mapped.widthRaw != null ? toMm(mapped.widthRaw, unit) : 0
-    const quantity =
-      mapped.qtyRaw != null ? Math.floor(mapped.qtyRaw) : 1
-
     return {
       name: mapped.name,
-      length,
-      width,
-      quantity,
-      grain: mapped.grain,
+      length: mapped.lengthRaw != null ? toMm(mapped.lengthRaw, unit) : 0,
+      width: mapped.widthRaw != null ? toMm(mapped.widthRaw, unit) : 0,
+      quantity: mapped.qtyRaw != null ? Math.floor(mapped.qtyRaw) : 1,
       raw: line,
       error,
     }
@@ -202,6 +170,5 @@ export function pasteRowsToParts(rows: ParsedPasteRow[]): PartRow[] {
       length: r.length,
       width: r.width,
       quantity: r.quantity,
-      grain: r.grain,
     }))
 }

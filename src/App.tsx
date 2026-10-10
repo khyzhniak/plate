@@ -13,10 +13,10 @@ import {
   saveSettings,
 } from './lib/storage'
 import { nestSheets, type NestResult } from './nesting'
-import type { CutSettings, LengthUnit, Material, PartRow } from './types/app'
+import type { CutSettings, LengthUnit, PartRow } from './types/app'
 
 export default function App() {
-  const [materials, setMaterials] = useState<Material[]>(() => loadMaterials())
+  const [materials, setMaterials] = useState(() => loadMaterials())
   const [parts, setParts] = useState<PartRow[]>(() => loadParts())
   const [settings, setSettings] = useState<CutSettings>(() => loadSettings())
   const [result, setResult] = useState<NestResult | null>(null)
@@ -45,13 +45,16 @@ export default function App() {
       return
     }
 
+    const respectGrain = selectedMaterial.respectGrain
+    // When grain matters: part length aligns with sheet length; no free 90° that breaks it.
+    // When off: free rotate under guillotine for better yield.
     const nestParts = activeParts.map((p) => ({
       id: p.id,
       name: p.name,
       width: p.length,
       height: p.width,
       quantity: p.quantity,
-      grain: p.grain,
+      grain: respectGrain ? ('length' as const) : ('none' as const),
     }))
 
     const nestResult = nestSheets(
@@ -59,21 +62,20 @@ export default function App() {
       {
         width: selectedMaterial.sheetLengthMm,
         height: selectedMaterial.sheetWidthMm,
-        grain: selectedMaterial.grain,
+        grain: respectGrain ? 'length' : 'none',
         availableCount: selectedMaterial.availableSheets,
       },
       {
         kerf: settings.kerfMm,
         edgeTrim: settings.edgeTrimMm,
-        allowRotate: settings.allowRotate,
-        respectGrain: settings.respectGrain,
-        mode: settings.mode,
+        allowRotate: true,
+        respectGrain,
+        mode: 'guillotine',
       },
     )
     setResult(nestResult)
   }
 
-  // Auto-compute on first load with defaults
   useEffect(() => {
     handleCompute()
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -95,7 +97,7 @@ export default function App() {
               Розкрій листових матеріалів
             </h1>
             <p className="text-sm text-[var(--ink-muted)] mt-0.5">
-              МДФ, фанера, ДСП — карта розкрою з пропилом і малюнком
+              МДФ, фанера, ДСП — карта розкрою під форматну пилку
             </p>
           </div>
           {error && (
@@ -121,7 +123,7 @@ export default function App() {
             settings={settings}
             onChange={setParts}
             onUnitChange={onUnitChange}
-            onConfirmPaste={(nextParts) => handleCompute(nextParts)}
+            onPasteApplied={(nextParts) => handleCompute(nextParts)}
           />
           <SettingsPanel
             settings={settings}

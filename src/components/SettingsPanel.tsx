@@ -1,6 +1,4 @@
-import type { OptimizationMode } from '../nesting'
 import type { CutSettings, Material } from '../types/app'
-import { MODE_LABELS } from '../types/app'
 
 interface Props {
   settings: CutSettings
@@ -41,7 +39,7 @@ export function SettingsPanel({
 
       <div className="grid grid-cols-2 gap-2">
         <label className="text-xs space-y-1 block">
-          <span className="text-[var(--ink-muted)]">Пропил (kerf), мм</span>
+          <span className="text-[var(--ink-muted)]">Пропил, мм</span>
           <input
             className="field mono"
             type="number"
@@ -67,43 +65,10 @@ export function SettingsPanel({
         </label>
       </div>
 
-      <label className="text-xs space-y-1 block">
-        <span className="text-[var(--ink-muted)]">Режим оптимізації</span>
-        <select
-          className="field"
-          value={settings.mode}
-          onChange={(e) =>
-            patch({ mode: e.target.value as OptimizationMode })
-          }
-        >
-          {(Object.keys(MODE_LABELS) as OptimizationMode[]).map((k) => (
-            <option key={k} value={k}>
-              {MODE_LABELS[k]}
-            </option>
-          ))}
-        </select>
-        <span className="block text-[11px] text-[var(--ink-muted)] mt-1 leading-snug">
-          За замовчуванням — наскрізні різи під форматну пилку / гільйотину.
-        </span>
-      </label>
-
-      <label className="flex items-center gap-2 text-sm">
-        <input
-          type="checkbox"
-          checked={settings.allowRotate}
-          onChange={(e) => patch({ allowRotate: e.target.checked })}
-        />
-        Дозволити поворот 90°
-      </label>
-
-      <label className="flex items-center gap-2 text-sm">
-        <input
-          type="checkbox"
-          checked={settings.respectGrain}
-          onChange={(e) => patch({ respectGrain: e.target.checked })}
-        />
-        Дотримуватись напрямку малюнка
-      </label>
+      <p className="text-[11px] text-[var(--ink-muted)] leading-snug">
+        Розкрій — наскрізні різи під форматну пилку. Малюнок вмикається в картці
+        матеріалу («Враховувати малюнок»).
+      </p>
 
       <button type="button" className="btn btn-primary w-full" onClick={onCompute}>
         Розрахувати розкрій

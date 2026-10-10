@@ -1,21 +1,19 @@
-import { useRef, useState } from 'react'
-import type { GrainDirection } from '../nesting'
+import { useRef, type ClipboardEvent } from 'react'
 import {
   parsePasteText,
   pasteRowsToParts,
-  type ParsedPasteRow,
 } from '../lib/pasteParts'
 import { newId } from '../lib/storage'
 import type { CutSettings, LengthUnit, PartRow } from '../types/app'
-import { GRAIN_LABELS, fromMm, toMm } from '../types/app'
-import { PastePreviewModal } from './PastePreviewModal'
+import { fromMm, toMm } from '../types/app'
 
 interface Props {
   parts: PartRow[]
   settings: CutSettings
   onChange: (parts: PartRow[]) => void
   onUnitChange: (unit: LengthUnit) => void
-  onConfirmPaste?: (nextParts: PartRow[]) => void
+  /** Called with the full parts list after a paste was applied (already nested). */
+  onPasteApplied?: (nextParts: PartRow[]) => void
 }
 
 export function PartsPanel({
@@ -23,9 +21,8 @@ export function PartsPanel({
   settings,
   onChange,
   onUnitChange,
-  onConfirmPaste,
+  onPasteApplied,
 }: Props) {
-  const [pasteRows, setPasteRows] = useState<ParsedPasteRow[] | null>(null)
   const fileRef = useRef<HTMLTextAreaElement>(null)
   const unit = settings.inputUnit
 
@@ -42,13 +39,26 @@ export function PartsPanel({
         length: 500,
         width: 300,
         quantity: 1,
-        grain: 'none',
       },
     ])
   }
 
   function remove(id: string) {
     onChange(parts.filter((p) => p.id !== id))
+  }
+
+  function applyPasteText(text: string) {
+    if (!text.trim()) return
+    const rows = parsePasteText(text, unit)
+    const added = pasteRowsToParts(rows)
+    if (added.length === 0) {
+      alert('Не вдалося розібрати вставку. Очікується: довжина\\tширина')
+      return
+    }
+    const next = [...parts, ...added]
+    onChange(next)
+    if (fileRef.current) fileRef.current.value = ''
+    onPasteApplied?.(next)
   }
 
   async function pasteFromClipboard() {
@@ -58,30 +68,20 @@ export function PartsPanel({
         alert('Буфер обміну порожній')
         return
       }
-      setPasteRows(parsePasteText(text, unit))
+      applyPasteText(text)
     } catch {
-      // Fallback: show textarea
       fileRef.current?.focus()
       alert(
-        'Не вдалося прочитати буфер. Вставте текст у поле нижче (Ctrl+V) і натисніть «Розібрати».',
+        'Не вдалося прочитати буфер. Вставте текст у поле нижче (Ctrl+V) — розбір автоматичний.',
       )
     }
   }
 
-  function parseManual() {
-    const text = fileRef.current?.value ?? ''
+  function onTextareaPaste(e: ClipboardEvent<HTMLTextAreaElement>) {
+    const text = e.clipboardData.getData('text')
     if (!text.trim()) return
-    setPasteRows(parsePasteText(text, unit))
-  }
-
-  function confirmPaste() {
-    if (!pasteRows) return
-    const added = pasteRowsToParts(pasteRows)
-    const next = [...parts, ...added]
-    onChange(next)
-    setPasteRows(null)
-    if (fileRef.current) fileRef.current.value = ''
-    onConfirmPaste?.(next)
+    e.preventDefault()
+    applyPasteText(text)
   }
 
   function displayValue(mm: number): string {
@@ -122,10 +122,9 @@ export function PartsPanel({
           <thead className="bg-[#eef2f6] sticky top-0">
             <tr className="text-left text-[var(--ink-muted)]">
               <th className="px-2 py-1.5 font-semibold">Назва</th>
-              <th className="px-2 py-1.5 font-semibold">Д</th>
-              <th className="px-2 py-1.5 font-semibold">Ш</th>
+              <th className="px-2 py-1.5 font-semibold">Довжина</th>
+              <th className="px-2 py-1.5 font-semibold">Ширина</th>
               <th className="px-2 py-1.5 font-semibold">К-сть</th>
-              <th className="px-2 py-1.5 font-semibold">Малюнок</th>
               <th className="px-1 py-1.5" />
             </tr>
           </thead>
@@ -139,7 +138,7 @@ export function PartsPanel({
                     onChange={(e) => update(p.id, { name: e.target.value })}
                   />
                 </td>
-                <td className="px-1 py-1 w-16">
+                <td className="px-1 py-1 w-20">
                   <input
                     className="field py-1 text-xs mono"
                     type="number"
@@ -153,7 +152,7 @@ export function PartsPanel({
                     }
                   />
                 </td>
-                <td className="px-1 py-1 w-16">
+                <td className="px-1 py-1 w-20">
                   <input
                     className="field py-1 text-xs mono"
                     type="number"
@@ -180,21 +179,6 @@ export function PartsPanel({
                     }
                   />
                 </td>
-                <td className="px-1 py-1 w-28">
-                  <select
-                    className="field py-1 text-xs"
-                    value={p.grain}
-                    onChange={(e) =>
-                      update(p.id, { grain: e.target.value as GrainDirection })
-                    }
-                  >
-                    {(Object.keys(GRAIN_LABELS) as GrainDirection[]).map((k) => (
-                      <option key={k} value={k}>
-                        {GRAIN_LABELS[k]}
-                      </option>
-                    ))}
-                  </select>
-                </td>
                 <td className="px-1 py-1">
                   <button
                     type="button"
@@ -213,26 +197,17 @@ export function PartsPanel({
 
       <div className="space-y-1.5">
         <label className="text-xs text-[var(--ink-muted)] block">
-          Вставка з Excel / Sheets — два стовпці: довжина (мм), ширина (мм).
-          Додатково можна: назва, к-сть, малюнок.
+          Вставка з Excel — два стовпці (таб): довжина, ширина (мм). К-сть = 1;
+          третій стовпець — кількість (опційно). Після вставки розкрій рахується
+          одразу.
         </label>
         <textarea
           ref={fileRef}
-          className="field mono text-xs min-h-[56px] resize-y"
-          placeholder={'720\t560\n1000\t500\n597\t396'}
+          className="field mono text-xs min-h-[72px] resize-y"
+          placeholder={'1288\t38\n1414\t38\n2224\t50\n2224\t63'}
+          onPaste={onTextareaPaste}
         />
-        <button type="button" className="btn btn-ghost text-sm" onClick={parseManual}>
-          Розібрати вставку
-        </button>
       </div>
-
-      {pasteRows && (
-        <PastePreviewModal
-          rows={pasteRows}
-          onConfirm={confirmPaste}
-          onCancel={() => setPasteRows(null)}
-        />
-      )}
     </section>
   )
 }
