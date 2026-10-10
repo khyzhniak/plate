@@ -39,17 +39,33 @@ export function SettingsPanel({
         </select>
       </label>
 
-      <label className="text-xs space-y-1 block">
-        <span className="text-[var(--ink-muted)]">Пропил (kerf), мм</span>
-        <input
-          className="field mono"
-          type="number"
-          min={0}
-          step={0.1}
-          value={settings.kerfMm}
-          onChange={(e) => patch({ kerfMm: Number(e.target.value) || 0 })}
-        />
-      </label>
+      <div className="grid grid-cols-2 gap-2">
+        <label className="text-xs space-y-1 block">
+          <span className="text-[var(--ink-muted)]">Пропил (kerf), мм</span>
+          <input
+            className="field mono"
+            type="number"
+            min={0}
+            step={0.1}
+            value={settings.kerfMm}
+            onChange={(e) => patch({ kerfMm: Number(e.target.value) || 0 })}
+          />
+        </label>
+        <label className="text-xs space-y-1 block">
+          <span className="text-[var(--ink-muted)]">Обрізка краю, мм</span>
+          <input
+            className="field mono"
+            type="number"
+            min={0}
+            step={0.1}
+            value={settings.edgeTrimMm}
+            onChange={(e) =>
+              patch({ edgeTrimMm: Number(e.target.value) || 0 })
+            }
+            title="Відступ від краю листа з усіх боків"
+          />
+        </label>
+      </div>
 
       <label className="text-xs space-y-1 block">
         <span className="text-[var(--ink-muted)]">Режим оптимізації</span>
@@ -66,6 +82,9 @@ export function SettingsPanel({
             </option>
           ))}
         </select>
+        <span className="block text-[11px] text-[var(--ink-muted)] mt-1 leading-snug">
+          За замовчуванням — наскрізні різи під форматну пилку / гільйотину.
+        </span>
       </label>
 
       <label className="flex items-center gap-2 text-sm">

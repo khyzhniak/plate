@@ -1,4 +1,9 @@
-export { nestSheets, validateNestResult } from './nest'
+export {
+  nestSheets,
+  validateNestResult,
+  validateGuillotineCuts,
+  minAdjacentKerf,
+} from './nest'
 export {
   rectsOverlap,
   isInBounds,
@@ -6,8 +11,10 @@ export {
   orientationsForPart,
   packingBinSize,
   packingPartSize,
+  usableSheetRect,
   area,
 } from './geometry'
+export { cutsAreThroughCuts } from './guillotine'
 export type {
   GrainDirection,
   OptimizationMode,
@@ -19,4 +26,6 @@ export type {
   NestSheetResult,
   NestStats,
   NestResult,
+  CutStep,
+  CutOrientation,
 } from './types'

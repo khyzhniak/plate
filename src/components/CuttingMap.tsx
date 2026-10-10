@@ -6,7 +6,7 @@ import {
   type PointerEvent as ReactPointerEvent,
   type WheelEvent as ReactWheelEvent,
 } from 'react'
-import type { NestResult, PlacedPart } from '../nesting'
+import type { CutStep, NestResult, PlacedPart } from '../nesting'
 import { formatMm } from '../types/app'
 
 interface Props {
@@ -20,6 +20,7 @@ export function CuttingMap({ result, materialName }: Props) {
   const [sheetTab, setSheetTab] = useState(0)
   const [selectedKey, setSelectedKey] = useState<string | null>(null)
   const [hoveredKey, setHoveredKey] = useState<string | null>(null)
+  const [showCuts, setShowCuts] = useState(true)
   const [view, setView] = useState({ x: 0, y: 0, scale: 1 })
   const dragRef = useRef<{ x: number; y: number; vx: number; vy: number } | null>(
     null,
@@ -36,11 +37,14 @@ export function CuttingMap({ result, materialName }: Props) {
 
   const numberedParts = useMemo(() => {
     if (!sheet) return []
-    return sheet.parts.map((p, i) => ({
-      ...p,
-      number: i + 1,
-      key: `${p.partId}-${p.instanceIndex}-${i}`,
-    }))
+    // Numbers follow guillotine cut / placement order
+    return [...sheet.parts]
+      .sort((a, b) => a.cutOrder - b.cutOrder)
+      .map((p, i) => ({
+        ...p,
+        number: p.cutOrder || i + 1,
+        key: `${p.partId}-${p.instanceIndex}-${i}`,
+      }))
   }, [sheet])
 
   const activeKey = hoveredKey ?? selectedKey
@@ -97,6 +101,7 @@ export function CuttingMap({ result, materialName }: Props) {
   const pad = 40
   const vbW = sheet.width + pad * 2
   const vbH = sheet.height + pad * 2
+  const trim = sheet.edgeTrim ?? 0
 
   return (
     <div className="h-full min-h-[420px] panel rounded-md flex flex-col overflow-hidden animate-map-in">
@@ -123,6 +128,16 @@ export function CuttingMap({ result, materialName }: Props) {
             </button>
           ))}
         </div>
+        {sheet.cuts.length > 0 && (
+          <button
+            type="button"
+            className={`btn text-xs px-2 py-1 ${showCuts ? 'btn-primary' : 'btn-ghost'}`}
+            onClick={() => setShowCuts((v) => !v)}
+            title="Показати наскрізні різи пилки"
+          >
+            Різи {sheet.cuts.length}
+          </button>
+        )}
         <button type="button" className="btn btn-ghost text-xs" onClick={resetView}>
           Скинути вид
         </button>
@@ -150,6 +165,55 @@ export function CuttingMap({ result, materialName }: Props) {
               stroke="#3a4a5c"
               strokeWidth={2 / view.scale}
             />
+
+            {/* Edge trim zone */}
+            {trim > 0 && (
+              <g style={{ pointerEvents: 'none' }}>
+                <rect
+                  x={0}
+                  y={0}
+                  width={sheet.width}
+                  height={trim}
+                  fill="#c45c26"
+                  opacity={0.18}
+                />
+                <rect
+                  x={0}
+                  y={sheet.height - trim}
+                  width={sheet.width}
+                  height={trim}
+                  fill="#c45c26"
+                  opacity={0.18}
+                />
+                <rect
+                  x={0}
+                  y={trim}
+                  width={trim}
+                  height={sheet.height - 2 * trim}
+                  fill="#c45c26"
+                  opacity={0.18}
+                />
+                <rect
+                  x={sheet.width - trim}
+                  y={trim}
+                  width={trim}
+                  height={sheet.height - 2 * trim}
+                  fill="#c45c26"
+                  opacity={0.18}
+                />
+                <rect
+                  x={sheet.usableX}
+                  y={sheet.usableY}
+                  width={sheet.usableWidth}
+                  height={sheet.usableHeight}
+                  fill="none"
+                  stroke="#c45c26"
+                  strokeWidth={1 / view.scale}
+                  strokeDasharray={`${6 / view.scale} ${4 / view.scale}`}
+                  opacity={0.7}
+                />
+              </g>
+            )}
 
             {/* Waste hatch */}
             <defs>
@@ -182,10 +246,10 @@ export function CuttingMap({ result, materialName }: Props) {
               </marker>
             </defs>
             <rect
-              x={0}
-              y={0}
-              width={sheet.width}
-              height={sheet.height}
+              x={sheet.usableX}
+              y={sheet.usableY}
+              width={sheet.usableWidth}
+              height={sheet.usableHeight}
               fill="url(#waste-hatch)"
               pointerEvents="none"
             />
@@ -216,6 +280,11 @@ export function CuttingMap({ result, materialName }: Props) {
                 }
               />
             ))}
+
+            {showCuts &&
+              sheet.cuts.map((cut) => (
+                <CutLine key={`cut-${cut.index}`} cut={cut} scale={view.scale} />
+              ))}
           </g>
         </svg>
 
@@ -235,9 +304,55 @@ export function CuttingMap({ result, materialName }: Props) {
 
         <div className="absolute top-3 right-3 text-[11px] mono bg-white/80 border border-[var(--panel-edge)] rounded px-2 py-1 text-[var(--ink-muted)]">
           {sheet.width}×{sheet.height} мм · {sheet.utilization.toFixed(1)}%
+          {trim > 0 ? ` · обрізка ${trim} мм` : ''}
         </div>
       </div>
     </div>
+  )
+}
+
+function CutLine({ cut, scale }: { cut: CutStep; scale: number }) {
+  const isVert = cut.orientation === 'vertical'
+  const x1 = isVert ? cut.position : cut.start
+  const y1 = isVert ? cut.start : cut.position
+  const x2 = isVert ? cut.position : cut.end
+  const y2 = isVert ? cut.end : cut.position
+  const midX = (x1 + x2) / 2
+  const midY = (y1 + y2) / 2
+  const labelOffset = 10 / scale
+
+  return (
+    <g style={{ pointerEvents: 'none' }}>
+      <line
+        x1={x1}
+        y1={y1}
+        x2={x2}
+        y2={y2}
+        stroke="#c45c26"
+        strokeWidth={2 / scale}
+        strokeDasharray={`${8 / scale} ${5 / scale}`}
+        opacity={0.85}
+      />
+      <circle
+        cx={midX + (isVert ? labelOffset : 0)}
+        cy={midY + (isVert ? 0 : -labelOffset)}
+        r={9 / scale}
+        fill="#c45c26"
+        opacity={0.9}
+      />
+      <text
+        x={midX + (isVert ? labelOffset : 0)}
+        y={midY + (isVert ? 0 : -labelOffset)}
+        textAnchor="middle"
+        dominantBaseline="middle"
+        fill="#fff"
+        fontSize={10 / scale}
+        fontFamily="var(--font-mono)"
+        fontWeight={700}
+      >
+        {cut.index}
+      </text>
+    </g>
   )
 }
 

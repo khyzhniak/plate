@@ -2,7 +2,8 @@
 
 export type GrainDirection = 'length' | 'width' | 'none'
 
-export type OptimizationMode = 'maxrects' | 'guillotine'
+/** Primary production mode is guillotine (panel saw). MaxRects is optional / non-saw. */
+export type OptimizationMode = 'guillotine' | 'maxrects'
 
 export interface NestPartInput {
   id: string
@@ -24,7 +25,10 @@ export interface NestSheetSpec {
 }
 
 export interface NestSettings {
+  /** Saw blade kerf between adjacent parts (mm) */
   kerf: number
+  /** Edge trim inset on all four sides of the sheet (mm). Default 3. */
+  edgeTrim: number
   allowRotate: boolean
   respectGrain: boolean
   mode: OptimizationMode
@@ -41,6 +45,29 @@ export interface PlacedPart {
   height: number
   rotated: boolean
   grain: GrainDirection
+  /** 1-based sequence number matching guillotine cut order */
+  cutOrder: number
+}
+
+export type CutOrientation = 'vertical' | 'horizontal'
+
+/** One through-cut on the current panel/strip (edge to opposite edge). */
+export interface CutStep {
+  /** 1-based sequence on this sheet */
+  index: number
+  sheetIndex: number
+  orientation: CutOrientation
+  /**
+   * Cut line position in sheet coordinates:
+   * x for vertical cuts, y for horizontal cuts.
+   */
+  position: number
+  /** Start of the cut along the panel (y for vertical, x for horizontal) */
+  start: number
+  /** End of the cut along the panel */
+  end: number
+  /** Panel being cut before this through-cut */
+  panel: { x: number; y: number; width: number; height: number }
 }
 
 export interface UnplacedPart {
@@ -57,7 +84,15 @@ export interface NestSheetResult {
   width: number
   height: number
   grain: GrainDirection
+  /** Usable nesting origin after edge trim */
+  usableX: number
+  usableY: number
+  usableWidth: number
+  usableHeight: number
+  edgeTrim: number
   parts: PlacedPart[]
+  /** Through-cuts in operator sequence order */
+  cuts: CutStep[]
   usedArea: number
   sheetArea: number
   utilization: number
@@ -96,4 +131,16 @@ export interface PackCandidate {
   rotated: boolean
   score: number
   scoreSecondary: number
+}
+
+export interface GuillotinePlaceResult {
+  freeRects: FreeRect[]
+  cuts: Array<{
+    orientation: CutOrientation
+    /** Position in packing coords (before sheet trim offset) */
+    position: number
+    start: number
+    end: number
+    panel: FreeRect
+  }>
 }

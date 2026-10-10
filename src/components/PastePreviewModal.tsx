@@ -24,7 +24,8 @@ export function PastePreviewModal({ rows, onConfirm, onCancel }: Props) {
               Попередній перегляд вставки
             </h3>
             <p className="text-sm text-[var(--ink-muted)] mt-0.5">
-              Перевірте рядки перед додаванням до списку деталей. Валідних:{' '}
+              Два стовпці = довжина × ширина (мм). Після підтвердження деталі
+              додаються і розкрій перераховується. Валідних:{' '}
               <span className="mono text-[var(--ok)]">{valid}</span>
               {invalid > 0 && (
                 <>

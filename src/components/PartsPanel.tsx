@@ -15,6 +15,7 @@ interface Props {
   settings: CutSettings
   onChange: (parts: PartRow[]) => void
   onUnitChange: (unit: LengthUnit) => void
+  onConfirmPaste?: (nextParts: PartRow[]) => void
 }
 
 export function PartsPanel({
@@ -22,6 +23,7 @@ export function PartsPanel({
   settings,
   onChange,
   onUnitChange,
+  onConfirmPaste,
 }: Props) {
   const [pasteRows, setPasteRows] = useState<ParsedPasteRow[] | null>(null)
   const fileRef = useRef<HTMLTextAreaElement>(null)
@@ -75,9 +77,11 @@ export function PartsPanel({
   function confirmPaste() {
     if (!pasteRows) return
     const added = pasteRowsToParts(pasteRows)
-    onChange([...parts, ...added])
+    const next = [...parts, ...added]
+    onChange(next)
     setPasteRows(null)
     if (fileRef.current) fileRef.current.value = ''
+    onConfirmPaste?.(next)
   }
 
   function displayValue(mm: number): string {
@@ -209,12 +213,13 @@ export function PartsPanel({
 
       <div className="space-y-1.5">
         <label className="text-xs text-[var(--ink-muted)] block">
-          Або вставте таблицю (назва, довжина, ширина, к-сть, малюнок):
+          Вставка з Excel / Sheets — два стовпці: довжина (мм), ширина (мм).
+          Додатково можна: назва, к-сть, малюнок.
         </label>
         <textarea
           ref={fileRef}
           className="field mono text-xs min-h-[56px] resize-y"
-          placeholder={'Бік\t720\t560\t2\tдовжина\nДно\t1000\t560\t1'}
+          placeholder={'720\t560\n1000\t500\n597\t396'}
         />
         <button type="button" className="btn btn-ghost text-sm" onClick={parseManual}>
           Розібрати вставку

@@ -27,6 +27,8 @@ export interface PartRow {
 export interface CutSettings {
   materialId: string | null
   kerfMm: number
+  /** Perimeter edge trim on all four sides (mm). Default 3. */
+  edgeTrimMm: number
   allowRotate: boolean
   respectGrain: boolean
   mode: OptimizationMode
@@ -47,8 +49,8 @@ export const GRAIN_LABELS: Record<GrainDirection, string> = {
 }
 
 export const MODE_LABELS: Record<OptimizationMode, string> = {
-  maxrects: 'Максимальне використання',
-  guillotine: 'Під пилку (гільйотина)',
+  guillotine: 'Під форматну пилку (наскрізні різи)',
+  maxrects: 'Макс. використання (не для пилки)',
 }
 
 export function toMm(value: number, unit: LengthUnit): number {

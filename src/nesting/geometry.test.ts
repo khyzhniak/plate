@@ -6,8 +6,14 @@ import {
   packingBinSize,
   packingPartSize,
   rectsOverlap,
+  usableSheetRect,
 } from './geometry'
-import { nestSheets, validateNestResult } from './nest'
+import {
+  minAdjacentKerf,
+  nestSheets,
+  validateGuillotineCuts,
+  validateNestResult,
+} from './nest'
 import type { NestPartInput, NestSettings, NestSheetSpec } from './types'
 
 describe('geometry', () => {
@@ -35,11 +41,21 @@ describe('geometry', () => {
     )
   })
 
-  it('expands packing sizes by kerf', () => {
+  it('expands packing sizes by kerf and insets by edge trim', () => {
     expect(packingPartSize(100, 50, 3)).toEqual({ width: 103, height: 53 })
     expect(packingBinSize(2800, 2070, 3)).toEqual({
       width: 2803,
       height: 2073,
+    })
+    expect(packingBinSize(2800, 2070, 3, 3)).toEqual({
+      width: 2800 - 6 + 3,
+      height: 2070 - 6 + 3,
+    })
+    expect(usableSheetRect(2800, 2070, 3)).toEqual({
+      x: 3,
+      y: 3,
+      width: 2794,
+      height: 2064,
     })
   })
 })
@@ -51,11 +67,8 @@ describe('grain and rotation', () => {
   })
 
   it('requires grain alignment when respected', () => {
-    // Sheet grain along X (length); part grain along length → OK unrotated
     expect(grainAllowsOrientation('length', 'length', false, true)).toBe(true)
-    // Rotating swaps part grain to Y → not OK
     expect(grainAllowsOrientation('length', 'length', true, true)).toBe(false)
-    // Part grain along width: unrotated runs along Y → not OK on length sheet
     expect(grainAllowsOrientation('length', 'width', false, true)).toBe(false)
     expect(grainAllowsOrientation('length', 'width', true, true)).toBe(true)
   })
@@ -86,9 +99,10 @@ describe('nestSheets', () => {
 
   const baseSettings: NestSettings = {
     kerf: 3,
+    edgeTrim: 3,
     allowRotate: true,
     respectGrain: false,
-    mode: 'maxrects',
+    mode: 'guillotine',
   }
 
   it('places parts without overlap and within bounds', () => {
@@ -107,8 +121,8 @@ describe('nestSheets', () => {
       { id: 'a', name: 'Бік', width: 720, height: 560, quantity: 6, grain: 'length' },
       { id: 'b', name: 'Дно', width: 1000, height: 500, quantity: 3, grain: 'none' },
     ]
-    const r1 = nestSheets(parts, sheet, { ...baseSettings, mode: 'guillotine' })
-    const r2 = nestSheets(parts, sheet, { ...baseSettings, mode: 'guillotine' })
+    const r1 = nestSheets(parts, sheet, baseSettings)
+    const r2 = nestSheets(parts, sheet, baseSettings)
     expect(r1).toEqual(r2)
   })
 
@@ -118,15 +132,72 @@ describe('nestSheets', () => {
     ]
     const smallSheet: NestSheetSpec = {
       width: 250,
-      height: 100,
+      height: 120,
       grain: 'none',
       availableCount: 1,
     }
-    const result = nestSheets(parts, smallSheet, { ...baseSettings, kerf: 3 })
+    const result = nestSheets(parts, smallSheet, {
+      ...baseSettings,
+      kerf: 3,
+      edgeTrim: 3,
+    })
     expect(result.stats.placedCount).toBe(2)
-    const [p1, p2] = [...result.sheets[0].parts].sort((a, b) => a.x - b.x)
-    // With kerf 3, second part should start at least 103mm from first origin
-    expect(p2.x).toBeGreaterThanOrEqual(p1.x + p1.width + 3 - 1e-6)
+    const [p1, p2] = [...result.sheets[0].parts].sort((a, b) => a.x - b.x || a.y - b.y)
+    const gapX = p2.x - (p1.x + p1.width)
+    const gapY = p2.y - (p1.y + p1.height)
+    const gap = Math.max(gapX, gapY)
+    expect(gap).toBeGreaterThanOrEqual(3 - 1e-6)
+    expect(minAdjacentKerf(result)).toBeGreaterThanOrEqual(3 - 1e-6)
+  })
+
+  it('insets all parts by perimeter edge trim', () => {
+    const parts: NestPartInput[] = [
+      { id: 'a', name: 'A', width: 200, height: 100, quantity: 3, grain: 'none' },
+    ]
+    const result = nestSheets(parts, sheet, {
+      ...baseSettings,
+      kerf: 3,
+      edgeTrim: 3,
+    })
+    expect(result.stats.placedCount).toBe(3)
+    const sh = result.sheets[0]
+    expect(sh.usableX).toBe(3)
+    expect(sh.usableY).toBe(3)
+    for (const p of sh.parts) {
+      expect(p.x).toBeGreaterThanOrEqual(3 - 1e-9)
+      expect(p.y).toBeGreaterThanOrEqual(3 - 1e-9)
+      expect(p.x + p.width).toBeLessThanOrEqual(sheet.width - 3 + 1e-9)
+      expect(p.y + p.height).toBeLessThanOrEqual(sheet.height - 3 + 1e-9)
+    }
+    expect(validateNestResult(result)).toEqual([])
+  })
+
+  it('guillotine layouts only use through-cuts', () => {
+    const parts: NestPartInput[] = [
+      { id: 'a', name: 'A', width: 900, height: 400, quantity: 5, grain: 'none' },
+      { id: 'b', name: 'B', width: 600, height: 500, quantity: 3, grain: 'none' },
+    ]
+    const result = nestSheets(parts, sheet, {
+      ...baseSettings,
+      mode: 'guillotine',
+    })
+    expect(validateNestResult(result)).toEqual([])
+    expect(validateGuillotineCuts(result)).toEqual([])
+    expect(result.sheets[0].cuts.length).toBeGreaterThan(0)
+    for (const cut of result.sheets[0].cuts) {
+      expect(cut.end - cut.start).toBeGreaterThan(1)
+      // Through-cut spans the recorded panel edge-to-edge
+      if (cut.orientation === 'vertical') {
+        expect(cut.start).toBeCloseTo(cut.panel.y, 3)
+        expect(cut.end).toBeCloseTo(cut.panel.y + cut.panel.height, 3)
+      } else {
+        expect(cut.start).toBeCloseTo(cut.panel.x, 3)
+        expect(cut.end).toBeCloseTo(cut.panel.x + cut.panel.width, 3)
+      }
+    }
+    // Part numbers follow cut/placement order
+    const orders = result.sheets[0].parts.map((p) => p.cutOrder)
+    expect(orders).toEqual([...orders].sort((a, b) => a - b))
   })
 
   it('reports oversized parts as unplaced', () => {
@@ -156,7 +227,6 @@ describe('nestSheets', () => {
         grain: 'length',
       },
     ]
-    // Sheet only 1500 wide — would need rotate, but grain forbids it
     const narrow: NestSheetSpec = {
       width: 1500,
       height: 2070,
@@ -170,17 +240,5 @@ describe('nestSheets', () => {
     })
     expect(result.unplaced).toHaveLength(1)
     expect(result.unplaced[0].reason).toMatch(/малюнка|більша/)
-  })
-
-  it('guillotine mode also produces valid layouts', () => {
-    const parts: NestPartInput[] = [
-      { id: 'a', name: 'A', width: 900, height: 400, quantity: 5, grain: 'none' },
-    ]
-    const result = nestSheets(parts, sheet, {
-      ...baseSettings,
-      mode: 'guillotine',
-    })
-    expect(validateNestResult(result)).toEqual([])
-    expect(result.stats.placedCount).toBe(5)
   })
 })

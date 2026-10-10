@@ -35,7 +35,24 @@ export function saveParts(parts: PartRow[]): void {
 }
 
 export function loadSettings(): CutSettings {
-  return readJson(SETTINGS_KEY, defaultSettings())
+  const loaded = readJson<Partial<CutSettings> & CutSettings>(
+    SETTINGS_KEY,
+    defaultSettings(),
+  )
+  // Migrate older saves: production path is guillotine; MaxRects stays selectable in UI
+  return {
+    ...defaultSettings(),
+    ...loaded,
+    edgeTrimMm:
+      typeof loaded.edgeTrimMm === 'number' ? loaded.edgeTrimMm : 3,
+    // Force panel-saw mode as primary after upgrade from MaxRects default
+    mode:
+      loaded.mode === 'guillotine' || loaded.mode === 'maxrects'
+        ? loaded.mode === 'maxrects' && !('edgeTrimMm' in loaded)
+          ? 'guillotine'
+          : loaded.mode
+        : 'guillotine',
+  }
 }
 
 export function saveSettings(settings: CutSettings): void {
@@ -126,9 +143,10 @@ export function defaultSettings(): CutSettings {
   return {
     materialId: 'mat-dsp-16',
     kerfMm: 3,
+    edgeTrimMm: 3,
     allowRotate: true,
     respectGrain: true,
-    mode: 'maxrects',
+    mode: 'guillotine',
     inputUnit: 'mm',
   }
 }

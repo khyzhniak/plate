@@ -31,20 +31,21 @@ export default function App() {
     [materials, settings.materialId],
   )
 
-  function handleCompute() {
+  function handleCompute(partsOverride?: PartRow[]) {
     setError(null)
+    const activeParts = partsOverride ?? parts
     if (!selectedMaterial) {
       setError('Оберіть матеріал у налаштуваннях')
       setResult(null)
       return
     }
-    if (parts.length === 0) {
+    if (activeParts.length === 0) {
       setError('Додайте хоча б одну деталь')
       setResult(null)
       return
     }
 
-    const nestParts = parts.map((p) => ({
+    const nestParts = activeParts.map((p) => ({
       id: p.id,
       name: p.name,
       width: p.length,
@@ -63,6 +64,7 @@ export default function App() {
       },
       {
         kerf: settings.kerfMm,
+        edgeTrim: settings.edgeTrimMm,
         allowRotate: settings.allowRotate,
         respectGrain: settings.respectGrain,
         mode: settings.mode,
@@ -119,6 +121,7 @@ export default function App() {
             settings={settings}
             onChange={setParts}
             onUnitChange={onUnitChange}
+            onConfirmPaste={(nextParts) => handleCompute(nextParts)}
           />
           <SettingsPanel
             settings={settings}
