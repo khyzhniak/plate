@@ -51,6 +51,11 @@ export function MaterialsPanel({
   const summary = selected
     ? `${selected.name} · ${selected.thicknessMm} мм · ${selected.sheetLengthMm}×${selected.sheetWidthMm}`
     : 'Матеріал не обрано'
+  const grainHint = selected
+    ? selected.respectGrain
+      ? 'малюнок враховується'
+      : 'малюнок не враховується'
+    : ''
 
   return (
     <section className="animate-fade-up space-y-2">
@@ -101,7 +106,7 @@ export function MaterialsPanel({
           {selected && (
             <div className="mono text-[11px] text-[var(--ink-muted)] mt-0.5">
               {MATERIAL_TYPE_LABELS[selected.type]} · {selected.availableSheets}{' '}
-              листів · натисніть, щоб розгорнути
+              листів · {grainHint} · натисніть, щоб розгорнути
             </div>
           )}
         </button>
@@ -229,16 +234,16 @@ export function MaterialsPanel({
                 <input
                   type="checkbox"
                   className="mt-0.5"
-                  checked={selected.respectGrain}
+                  checked={!selected.respectGrain}
                   onChange={(e) =>
-                    update(selected.id, { respectGrain: e.target.checked })
+                    update(selected.id, { respectGrain: !e.target.checked })
                   }
                 />
                 <span>
-                  <span className="font-medium">Враховувати малюнок</span>
+                  <span className="font-medium">Не враховувати малюнок</span>
                   <span className="block text-[11px] text-[var(--ink-muted)] leading-snug mt-0.5">
-                    Увімкнено: довжина деталі уздовж довжини листа. Вимкнено
-                    (типово): малюнок не враховується, поворот 90° вільний.
+                    Увімкнено (типово): лише різи пилки, поворот 90° вільний.
+                    Вимкнено: довжина деталі уздовж довжини листа.
                   </span>
                 </span>
               </label>

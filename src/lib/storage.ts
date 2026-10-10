@@ -120,7 +120,7 @@ export function defaultMaterials(): Material[] {
       thicknessMm: 18,
       sheetLengthMm: 2500,
       sheetWidthMm: 1250,
-      respectGrain: true,
+      respectGrain: false,
       availableSheets: 5,
     },
     {

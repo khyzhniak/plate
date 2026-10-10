@@ -3,13 +3,23 @@ import type { CutSettings, Material } from '../types/app'
 interface Props {
   settings: CutSettings
   materials: Material[]
+  selectedMaterial: Material | null
   onChange: (settings: CutSettings) => void
+  onMaterialPatch: (materialId: string, patch: Partial<Material>) => void
 }
 
-export function SettingsPanel({ settings, materials, onChange }: Props) {
+export function SettingsPanel({
+  settings,
+  materials,
+  selectedMaterial,
+  onChange,
+  onMaterialPatch,
+}: Props) {
   function patch(p: Partial<CutSettings>) {
     onChange({ ...settings, ...p })
   }
+
+  const ignoreGrain = selectedMaterial ? !selectedMaterial.respectGrain : true
 
   return (
     <section className="animate-fade-up space-y-3" style={{ animationDelay: '80ms' }}>
@@ -59,9 +69,37 @@ export function SettingsPanel({ settings, materials, onChange }: Props) {
         </label>
       </div>
 
+      <label
+        className={`flex items-start gap-2.5 rounded border px-3 py-2.5 text-sm cursor-pointer transition-colors ${
+          ignoreGrain
+            ? 'border-[var(--accent)] bg-[var(--accent-soft)]'
+            : 'border-[var(--panel-edge)] bg-white/70'
+        }`}
+      >
+        <input
+          type="checkbox"
+          className="mt-0.5"
+          checked={ignoreGrain}
+          disabled={!selectedMaterial}
+          onChange={(e) => {
+            if (!selectedMaterial) return
+            onMaterialPatch(selectedMaterial.id, {
+              respectGrain: !e.target.checked,
+            })
+          }}
+        />
+        <span>
+          <span className="font-semibold">Не враховувати малюнок</span>
+          <span className="block text-[11px] text-[var(--ink-muted)] leading-snug mt-0.5">
+            Увімкнено (типово): розкрій лише під пилку — вільний поворот 90°,
+            довжина/ширина лише як розміри. Вимкнено: довжина деталі лишається
+            уздовж довжини листа (малюнок).
+          </span>
+        </span>
+      </label>
+
       <p className="text-[11px] text-[var(--ink-muted)] leading-snug">
-        Розкрій перераховується автоматично після змін. Малюнок — у картці
-        матеріалу («Враховувати малюнок»).
+        Розкрій перераховується автоматично після змін.
       </p>
     </section>
   )

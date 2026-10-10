@@ -165,7 +165,13 @@ export default function App() {
           <SettingsPanel
             settings={settings}
             materials={materials}
+            selectedMaterial={selectedMaterial}
             onChange={setSettings}
+            onMaterialPatch={(id, patch) =>
+              setMaterials((list) =>
+                list.map((m) => (m.id === id ? { ...m, ...patch } : m)),
+              )
+            }
           />
           <StatsPanel result={result} />
         </aside>
